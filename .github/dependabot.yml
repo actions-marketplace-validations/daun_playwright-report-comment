@@ -1,17 +1,14 @@
 version: 2
 updates:
-  - package-ecosystem: github-actions
-    directory: /
-    labels:
-      - dependabot
-      - actions
-    schedule:
-      interval: daily
-
   - package-ecosystem: npm
     directory: /
     labels:
-      - dependabot
-      - npm
+      - dependencies
     schedule:
-      interval: daily
+      interval: monthly
+  - package-ecosystem: github-actions
+    directory: /
+    labels:
+      - dependencies
+    schedule:
+      interval: monthly

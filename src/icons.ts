@@ -14,7 +14,8 @@ export const icons: Record<string, IconSet> = {
 		duration: 'clock',
 		link: 'link-external',
 		report: 'package',
-		commit: 'git-pull-request'
+		commit: 'git-pull-request',
+		info: 'info'
 	},
 	emojis: {
 		failed: '❌',
@@ -25,7 +26,8 @@ export const icons: Record<string, IconSet> = {
 		duration: '',
 		link: '',
 		report: '',
-		commit: ''
+		commit: '',
+		info: 'ℹ️'
 	}
 }
 
@@ -49,10 +51,7 @@ export function renderIcon(
 	}
 }
 
-function createOcticonUrl(
-	icon: string,
-	{ label = 'icon', color = iconColors.icon, size = iconSize } = {}
-): string {
+function createOcticonUrl(icon: string, { label = 'icon', color = iconColors.icon, size = iconSize } = {}): string {
 	if (icon) {
 		return `![${label}](https://icongr.am/octicons/${icon}.svg?size=${size}&color=${color})`
 	} else {
