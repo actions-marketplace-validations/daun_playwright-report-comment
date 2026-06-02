@@ -1,14 +1,23 @@
-import {
+import { debug } from '@actions/core'
+import type {
 	JSONReport,
 	JSONReportSpec,
 	JSONReportSuite,
 	JSONReportTest,
 	JSONReportTestResult
 } from '@playwright/test/reporter'
-import { debug } from '@actions/core'
 
-import { formatDuration, n, renderAccordion, renderCodeBlock, upperCaseFirst } from './formatting'
-import { icons, renderIcon } from './icons'
+import {
+	escapeForMarkdown,
+	formatDuration,
+	n,
+	renderAccordion,
+	renderCodeBlock,
+	sanitizeTestFilePath,
+	sanitizeTestTitle,
+	upperCaseFirst
+} from './formatting'
+import { type icons, renderIcon } from './icons'
 
 export interface ReportSummary {
 	version: string
@@ -67,17 +76,24 @@ interface TestResultSummary {
 	started: Date
 }
 
+type ReportRenderSection = 'failed' | 'passed' | 'flaky' | 'skipped'
+type ReportRenderSectionState = ReportRenderSection | `-${ReportRenderSection}`
+
 interface ReportRenderOptions {
 	commit?: string
 	commitUrl?: string
 	message?: string
 	title?: string
+	sections?: ReportRenderSectionState[]
 	customInfo?: string
 	reportUrl?: string
 	iconStyle?: keyof typeof icons
 	testCommand?: string
 	footer?: string
 }
+
+// Cap on tests rendered per section to prevent comment flooding on catastrophic-failure runs
+export const MAX_TESTS_PER_SECTION = 100
 
 export function isValidReport(report: unknown): report is JSONReport {
 	return report !== null && typeof report === 'object' && 'config' in report && 'errors' in report && 'suites' in report
@@ -186,7 +202,18 @@ export function buildTitle(...paths: string[]): { title: string; path: string[] 
 
 export function renderReportSummary(
 	report: ReportSummary,
-	{ commit, commitUrl, message, title, customInfo, reportUrl, iconStyle, testCommand, footer }: ReportRenderOptions = {}
+	{
+		commit,
+		commitUrl,
+		message,
+		title,
+		sections,
+		customInfo,
+		reportUrl,
+		iconStyle,
+		testCommand,
+		footer
+	}: ReportRenderOptions = {}
 ): string {
 	const { duration, failed, passed, flaky, skipped } = report
 	const icon = (symbol: string): string => renderIcon(symbol, { iconStyle })
@@ -224,24 +251,29 @@ export function renderReportSummary(
 		commitText && !message ? `${icon('commit')}  ${commitText}` : '',
 		customInfo ? `${icon('info')}  ${customInfo}` : ''
 	]
+
 	paragraphs.push(stats.filter(Boolean).join('  \n'))
 
 	// Lists of failed/skipped tests
 
-	const listStatuses = ['failed', 'flaky', 'skipped'] as const
-	const details = listStatuses.map((status) => {
-		const tests = report[status]
-		if (tests.length) {
-			const summary = `${upperCaseFirst(status)} tests`
-			const content = renderTestList(tests, status !== 'skipped' ? testCommand : undefined)
-			const open = status === 'failed'
-			return renderAccordion(summary, content, { open })
-		}
+	const listSections = (sections ?? ['failed', '-flaky', '-skipped']).map((raw: string) => {
+		const open = !raw.startsWith('-')
+		const status = (open ? raw : raw.slice(1)) as ReportRenderSection
+		return { status, open }
 	})
+
+	const details = listSections.map(({ status, open }) => {
+		const tests = report[status]
+		if (!tests.length) return ''
+		const summary = `${upperCaseFirst(status)} tests`
+		const content = renderTestList(tests, status !== 'skipped' ? testCommand : undefined)
+		return renderAccordion(summary, content, { open })
+	})
+
 	paragraphs.push(
 		details
 			.filter(Boolean)
-			.map((md) => (md as string).trim())
+			.map((md) => md.trim())
 			.join('\n')
 	)
 
@@ -256,12 +288,20 @@ export function renderReportSummary(
 }
 
 function renderTestList(tests: TestSummary[], testCommand: string | undefined): string {
-	const list = tests.map((test) => `  ${test.title}`).join('\n')
+	const shown = tests.slice(0, MAX_TESTS_PER_SECTION)
+	const overflow = tests.length - shown.length
+
+	const lines = shown.map((test) => `  ${escapeForMarkdown(sanitizeTestTitle(test.title))}`)
+	if (overflow > 0) {
+		lines.push(`  … and ${overflow} more`)
+	}
+	const list = lines.join('\n')
+
 	if (!testCommand) {
 		return list
 	}
 
-	const testIds = tests.map((test) => `${test.file}:${test.line}`).join(' ')
+	const testIds = shown.map((test) => `${sanitizeTestFilePath(test.file)}:${test.line}`).join(' ')
 	const command = `${testCommand} ${testIds}`
 
 	return `${list}\n\n${renderCodeBlock(command)}`

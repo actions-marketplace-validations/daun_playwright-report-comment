@@ -21,7 +21,8 @@ inputs:
     description: 'URL to the generated html report, if uploaded'
     required: false
   pr-number:
-    description: 'The pull request number to comment on. Only required if the action is run outside a pull request context.'
+    description:
+      'The pull request number to comment on. Only required if the action is run outside a pull request context.'
     required: false
   create-comment:
     description: 'Create a pull request comment with the test result summary'
@@ -33,6 +34,9 @@ inputs:
     default: 'Playwright test results'
   custom-info:
     description: 'Additional information to include in the summary comment, markdown-formatted'
+    required: false
+  sections:
+    description: 'Configure the order and visibility of test results'
     required: false
   job-summary:
     description: 'Create a job summary comment for the workflow run'
@@ -59,5 +63,5 @@ outputs:
     description: 'The raw data of the test report'
 
 runs:
-  using: node20
+  using: node24
   main: dist/index.js
